@@ -75,6 +75,8 @@ void init_op_array(zend_op_array *op_array, zend_uchar type, int initial_ops_siz
 	op_array->doc_comment = NULL;
 	op_array->doc_comment_len = 0;
 
+	op_array->annotations = NULL;
+
 	op_array->arg_info = NULL;
 	op_array->num_args = 0;
 	op_array->required_num_args = 0;
@@ -234,6 +236,10 @@ void _destroy_zend_class_traits_info(zend_class_entry *ce)
 			if (ce->trait_aliases[i]->alias) {
 				efree((char*)ce->trait_aliases[i]->alias);
 			}
+			if (ce->info.user.annotations) {
+				zend_hash_destroy(ce->info.user.annotations);
+				efree(ce->info.user.annotations);
+			}
 			
 			efree(ce->trait_aliases[i]);
 			i++;
@@ -268,6 +274,7 @@ ZEND_API void destroy_zend_class(zend_class_entry **pce)
 	if (--ce->refcount > 0) {
 		return;
 	}
+	
 	switch (ce->type) {
 		case ZEND_USER_CLASS:
 			if (ce->default_properties_table) {
@@ -301,6 +308,11 @@ ZEND_API void destroy_zend_class(zend_class_entry **pce)
 				efree((char*)ce->info.user.doc_comment);
 			}
 			
+			if (ce->info.user.annotations) {
+				zend_hash_destroy(ce->info.user.annotations);
+				efree(ce->info.user.annotations);
+			}
+
 			_destroy_zend_class_traits_info(ce);
 			
 			efree(ce);
@@ -387,6 +399,10 @@ ZEND_API void destroy_op_array(zend_op_array *op_array TSRMLS_DC)
 	if (op_array->doc_comment) {
 		efree((char*)op_array->doc_comment);
 	}
+	if (op_array->annotations) {
+		zend_hash_destroy(op_array->annotations);
+		efree(op_array->annotations);
+	}
 	if (op_array->brk_cont_array) {
 		efree(op_array->brk_cont_array);
 	}
@@ -401,6 +417,11 @@ ZEND_API void destroy_op_array(zend_op_array *op_array TSRMLS_DC)
 			str_efree(op_array->arg_info[i].name);
 			if (op_array->arg_info[i].class_name) {
 				str_efree(op_array->arg_info[i].class_name);
+			}
+			if (op_array->arg_info[i].annotations) {
+				zend_hash_destroy(op_array->arg_info[i].annotations);
+				efree(op_array->arg_info[i].annotations);
+
 			}
 		}
 		efree(op_array->arg_info);

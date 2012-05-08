@@ -219,6 +219,8 @@ typedef struct _zend_property_info {
 	const char *doc_comment;
 	int doc_comment_len;
 	zend_class_entry *ce;
+	HashTable *annotations;
+	zend_bool inherited;
 } zend_property_info;
 
 
@@ -230,6 +232,7 @@ typedef struct _zend_arg_info {
 	zend_uchar type_hint;
 	zend_bool allow_null;
 	zend_bool pass_by_reference;
+	HashTable *annotations;
 } zend_arg_info;
 
 /* the following structure repeats the layout of zend_arg_info,
@@ -291,6 +294,8 @@ struct _zend_op_array {
 	const char *doc_comment;
 	zend_uint doc_comment_len;
 	zend_uint early_binding; /* the linked list of delayed declarations */
+
+	HashTable *annotations;
 
 	zend_literal *literals;
 	int last_literal;
@@ -624,6 +629,15 @@ void zend_do_label(znode *label TSRMLS_DC);
 void zend_do_goto(const znode *label TSRMLS_DC);
 void zend_resolve_goto_label(zend_op_array *op_array, zend_op *opline, int pass2 TSRMLS_DC);
 void zend_release_labels(TSRMLS_D);
+
+void zend_do_begin_annotation_declaration(const znode *annotation_token, znode *annotation_name, int param TSRMLS_DC);
+void zend_do_end_annotation_declaration(TSRMLS_D);
+void zend_do_add_annotation_value(znode *name TSRMLS_DC);
+void zend_do_init_annotation_array(TSRMLS_D);
+void zend_do_add_annotation_array_element(znode *offset TSRMLS_DC);
+void zend_do_scalar_annotation_value(znode *value TSRMLS_DC);
+void zend_do_array_annotation_value(TSRMLS_D);
+void zend_do_annotation_annotation_value(TSRMLS_D);
 
 ZEND_API void function_add_ref(zend_function *function);
 

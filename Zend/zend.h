@@ -421,6 +421,29 @@ struct _zend_unserialize_data;
 typedef struct _zend_serialize_data zend_serialize_data;
 typedef struct _zend_unserialize_data zend_unserialize_data;
 
+#define ZEND_ANNOTATION_ZVAL 1
+#define ZEND_ANNOTATION_ANNO 2
+#define ZEND_ANNOTATION_HASH 3
+
+struct _zend_annotation {
+	char *annotation_name;
+	unsigned int aname_len;
+
+	HashTable *values;
+	zval *instance;
+};
+typedef struct _zend_annotation zend_annotation;
+
+struct _zend_annotation_value {
+	zend_uchar type;
+	union _zend_annotation_value_value {
+		zend_annotation *annotation;
+		zval *zval;
+		HashTable *ht;	
+	} value;
+};
+typedef struct _zend_annotation_value zend_annotation_value;
+
 struct _zend_trait_method_reference {
 	const char* method_name;
 	unsigned int mname_len;
@@ -516,12 +539,14 @@ struct _zend_class_entry {
 			zend_uint line_end;
 			const char *doc_comment;
 			zend_uint doc_comment_len;
+			HashTable *annotations;
 		} user;
 		struct {
 			const struct _zend_function_entry *builtin_functions;
 			struct _zend_module_entry *module;
 		} internal;
 	} info;
+	
 };
 
 #include "zend_stream.h"
