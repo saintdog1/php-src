@@ -962,7 +962,12 @@ PHP_MINIT_FUNCTION(curl)
 	REGISTER_CURL_CONSTANT(CURLUSESSL_CONTROL);
 	REGISTER_CURL_CONSTANT(CURLUSESSL_NONE);
 	REGISTER_CURL_CONSTANT(CURLUSESSL_TRY);
-#endif	
+#endif
+
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
+	REGISTER_CURL_CONSTANT(CURLOPT_OPENSOCKETFUNCTION);
+	REGISTER_CURL_CONSTANT(CURL_SOCKET_BAD);
+#endif
 
 #if LIBCURL_VERSION_NUM >= 0x071200 /* Available since 7.18.0 */
 	REGISTER_CURL_CONSTANT(CURLOPT_PROXY_TRANSFER_MODE);
@@ -1108,6 +1113,10 @@ PHP_MINIT_FUNCTION(curl)
 #if LIBCURL_VERSION_NUM >= 0x071506 /* Available since 7.21.6 */
 	REGISTER_CURL_CONSTANT(CURLOPT_ACCEPT_ENCODING);
 	REGISTER_CURL_CONSTANT(CURLOPT_TRANSFER_ENCODING);
+#endif
+
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071507 /* Available since 7.21.7 */
+	REGISTER_CURL_CONSTANT(CURLOPT_CLOSESOCKETFUNCTION);
 #endif
 
 #if LIBCURL_VERSION_NUM >= 0x071800 /* Available since 7.24.0 */
@@ -1293,7 +1302,7 @@ static size_t curl_write(char *data, size_t size, size_t nmemb, void *ctx)
    */
 static int curl_sockopt(void *ctx, curl_socket_t curlfd, curlsocktype purpose) {
 	php_curl *ch = (php_curl *) ctx;
-	php_curl_sockopt *t = ch->handlers->sockopt;
+	php_curl_callback_function *t = ch->handlers->sockopt;
 	int rval = 0;
 	switch (t->method) {
 		case PHP_CURL_USER: {
@@ -1354,6 +1363,153 @@ static int curl_sockopt(void *ctx, curl_socket_t curlfd, curlsocktype purpose) {
 
 			zval_ptr_dtor(argv[1]);
 			zval_ptr_dtor(argv[2]);
+			break;
+
+		}
+	}
+	return rval;
+}
+/* }}} */
+#endif
+
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
+/* {{{ curl_opensocket
+ */
+static curl_socket_t curl_opensocket(void *ctx, curlsocktype purpose, struct curl_sockaddr *address) {
+	php_curl *ch = (php_curl *) ctx;
+	php_curl_callback_function *t = ch->handlers->opensocket;
+	int rval = 0;
+	switch (t->method) {
+		case PHP_CURL_USER: {
+			zval **argv[3];
+			zval *zhandle = NULL;
+			zval *zpurpose = NULL;
+			zval *zsockaddr = NULL;
+			zval *retval_ptr;
+			int  error;
+			zend_fcall_info fci;
+			TSRMLS_FETCH_FROM_CTX(ch->thread_ctx);
+
+			MAKE_STD_ZVAL(zhandle);
+			MAKE_STD_ZVAL(zpurpose);
+			MAKE_STD_ZVAL(zsockaddr);
+
+			ZVAL_RESOURCE(zhandle, ch->id);
+			zend_list_addref(ch->id);
+			array_init(zsockaddr);
+			add_assoc_long_ex(zsockaddr, "family", sizeof("family"), address->family);
+			add_assoc_long_ex(zsockaddr, "socktype", sizeof("socktype"), address->socktype);
+			add_assoc_long_ex(zsockaddr, "protocol", sizeof("protocol"), address->protocol);
+			ZVAL_LONG(zpurpose, purpose);
+
+			argv[0] = &zhandle;
+			argv[1] = &zpurpose;
+			argv[2] = &zsockaddr;
+
+			fci.size = sizeof(fci);
+			fci.function_table = EG(function_table);
+			fci.function_name = t->func_name;
+			fci.object_ptr = NULL;
+			fci.retval_ptr_ptr = &retval_ptr;
+			fci.param_count = 3;
+			fci.params = argv;
+			fci.no_separation = 0;
+			fci.symbol_table = NULL;
+
+			ch->in_callback = 1;
+			error = zend_call_function(&fci, &t->fci_cache TSRMLS_CC);
+			ch->in_callback = 0;
+			if (error == FAILURE) {
+				php_error_docref(NULL TSRMLS_CC, E_WARNING, "Cannot call the CURLOPT_OPENSOCKETFUNCTION");
+			} else if (retval_ptr) {
+				if (Z_TYPE_P(retval_ptr) == IS_RESOURCE) {
+					php_socket *php_sock;					
+					if (ZEND_FETCH_RESOURCE_NO_RETURN(php_sock, php_socket *, &retval_ptr, -1, NULL, php_sockets_le_socket())) {
+						rval = php_sock->bsd_socket;
+						php_sock->bsd_socket = -1;
+					} else {
+						rval = CURL_SOCKET_BAD;
+					}
+				} else {
+					if (Z_TYPE_P(retval_ptr) != IS_LONG) {
+						rval = CURL_SOCKET_BAD;
+					} else {
+						rval = Z_LVAL_P(retval_ptr);
+					}
+				}
+				zval_ptr_dtor(&retval_ptr);
+			}
+			zval_ptr_dtor(argv[0]);
+			zval_ptr_dtor(argv[1]);
+			zval_ptr_dtor(argv[2]);
+			break;
+		}
+	}
+	return rval;
+
+}
+/* }}} */
+#endif
+
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071507 /* Available since 7.21.7 */
+/* {{{ curl_opensocket
+ */
+static int curl_closesocket(void *ctx, curl_socket_t curlfd) {
+	php_curl *ch = (php_curl *) ctx;
+	php_curl_callback_function *t = ch->handlers->closesocket;
+	int rval = 0;
+	switch (t->method) {
+		case PHP_CURL_USER: {
+			php_socket  *php_sock = emalloc(sizeof *php_sock);
+			php_sock->bsd_socket = curlfd;
+			php_sock->type       = PF_UNSPEC;
+			php_sock->error      = 0;
+			php_sock->blocking   = 1;
+			php_sock->zstream    = NULL;
+
+			zval **argv[2];
+			zval *zhandle = NULL;
+			zval *zcurlfd = NULL;
+			zval *retval_ptr;
+			int  error;
+			zend_fcall_info fci;
+			TSRMLS_FETCH_FROM_CTX(ch->thread_ctx);
+
+			MAKE_STD_ZVAL(zhandle);
+			MAKE_STD_ZVAL(zcurlfd);
+
+			ZVAL_RESOURCE(zhandle, ch->id);
+			zend_list_addref(ch->id);
+
+			ZEND_REGISTER_RESOURCE(zcurlfd, php_sock, php_sockets_le_socket());
+
+			argv[0] = &zhandle;
+			argv[1] = &zcurlfd;
+
+			fci.size = sizeof(fci);
+			fci.function_table = EG(function_table);
+			fci.function_name = t->func_name;
+			fci.object_ptr = NULL;
+			fci.retval_ptr_ptr = &retval_ptr;
+			fci.param_count = 2;
+			fci.params = argv;
+			fci.no_separation = 0;
+			fci.symbol_table = NULL;
+
+			ch->in_callback = 1;
+			error = zend_call_function(&fci, &t->fci_cache TSRMLS_CC);
+			ch->in_callback = 0;
+			if (error == FAILURE) {
+				php_error_docref(NULL TSRMLS_CC, E_WARNING, "Cannot call the CURLOPT_CLOSESOCKETFUNCTION");
+			} else if (retval_ptr) {
+				if (Z_TYPE_P(retval_ptr) != IS_LONG) {
+					convert_to_long_ex(&retval_ptr);
+				}
+				rval = Z_LVAL_P(retval_ptr);
+				zval_ptr_dtor(&retval_ptr);
+			}
+			zval_ptr_dtor(argv[0]);
+			zval_ptr_dtor(argv[1]);
 			break;
 
 		}
@@ -1806,6 +1962,12 @@ static void alloc_curl_handle(php_curl **ch)
 #if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071000 /* Available since 7.16.0 */
 	(*ch)->handlers->sockopt      = NULL;
 #endif
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
+	(*ch)->handlers->opensocket   = NULL;
+#endif
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071507 /* Available since 7.21.7 */
+	(*ch)->handlers->closesocket  = NULL;
+#endif
 #if LIBCURL_VERSION_NUM >= 0x071500 /* Available since 7.21.0 */
 	(*ch)->handlers->fnmatch      = NULL;
 #endif
@@ -2063,7 +2225,7 @@ PHP_FUNCTION(curl_copy_handle)
 
 #if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071000 /* Available since 7.16.0 */
 	if (ch->handlers->sockopt) {
-		dupch->handlers->sockopt = ecalloc(1, sizeof(php_curl_sockopt));
+		dupch->handlers->sockopt = ecalloc(1, sizeof(php_curl_callback_function));
 		if (ch->handlers->sockopt->func_name) {
 			zval_add_ref(&ch->handlers->sockopt->func_name);
 			dupch->handlers->sockopt->func_name = ch->handlers->sockopt->func_name;
@@ -2072,6 +2234,30 @@ PHP_FUNCTION(curl_copy_handle)
 		curl_easy_setopt(dupch->cp, CURLOPT_SOCKOPTDATA, (void *) dupch);
 	}
 #endif
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
+	if (ch->handlers->opensocket) {
+		dupch->handlers->opensocket = ecalloc(1, sizeof(php_curl_callback_function));
+		if (ch->handlers->opensocket->func_name) {
+			zval_add_ref(&ch->handlers->opensocket->func_name);
+			dupch->handlers->opensocket->func_name = ch->handlers->opensocket->func_name;
+		}
+		dupch->handlers->opensocket->method = ch->handlers->opensocket->method;
+		curl_easy_setopt(dupch->cp, CURLOPT_OPENSOCKETDATA, (void *) dupch);
+	}
+#endif
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071507 /* Available since 7.21.7 */
+	if (ch->handlers->closesocket) {
+		dupch->handlers->closesocket = ecalloc(1, sizeof(php_curl_callback_function));
+		if (ch->handlers->closesocket->func_name) {
+			zval_add_ref(&ch->handlers->closesocket->func_name);
+			dupch->handlers->closesocket->func_name = ch->handlers->closesocket->func_name;
+		}
+		dupch->handlers->closesocket->method = ch->handlers->closesocket->method;
+		curl_easy_setopt(dupch->cp, CURLOPT_CLOSESOCKETDATA, (void *) dupch);
+	}
+#endif
+
+
 #if LIBCURL_VERSION_NUM >= 0x071500 /* Available since 7.21.0 */
 	if (ch->handlers->fnmatch) {
 		dupch->handlers->fnmatch = ecalloc(1, sizeof(php_curl_fnmatch));
@@ -2781,13 +2967,12 @@ string_copy:
 					curl_easy_setopt(ch->cp, CURLOPT_SHARE, sh->share);
 				}
 			}
-
 #if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071000 /* Available since 7.16.0 */
 		case CURLOPT_SOCKOPTFUNCTION:
 			curl_easy_setopt(ch->cp, CURLOPT_SOCKOPTFUNCTION, curl_sockopt);
 			curl_easy_setopt(ch->cp, CURLOPT_SOCKOPTDATA, ch);
 			if (ch->handlers->sockopt == NULL) {
-				ch->handlers->sockopt = ecalloc(1, sizeof(php_curl_sockopt));
+				ch->handlers->sockopt = ecalloc(1, sizeof(php_curl_callback_function));
 			} else if (ch->handlers->sockopt->func_name) {
 				zval_ptr_dtor(&ch->handlers->sockopt->func_name);
 				ch->handlers->sockopt->fci_cache = empty_fcall_info_cache;
@@ -2797,6 +2982,38 @@ string_copy:
 			ch->handlers->sockopt->method = PHP_CURL_USER;
 			break;
 #endif
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
+		case CURLOPT_OPENSOCKETFUNCTION:
+			curl_easy_setopt(ch->cp, CURLOPT_OPENSOCKETFUNCTION, curl_opensocket);
+			curl_easy_setopt(ch->cp, CURLOPT_OPENSOCKETDATA, ch);
+			if (ch->handlers->opensocket == NULL) {
+				ch->handlers->opensocket = ecalloc(1, sizeof(php_curl_callback_function));
+			} else if (ch->handlers->opensocket->func_name) {
+				zval_ptr_dtor(&ch->handlers->opensocket->func_name);
+				ch->handlers->opensocket->fci_cache = empty_fcall_info_cache;
+			}
+			zval_add_ref(zvalue);
+			ch->handlers->opensocket->func_name = *zvalue;
+			ch->handlers->opensocket->method = PHP_CURL_USER;
+			break;
+#endif
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071507 /* Available since 7.21.7 */
+		case CURLOPT_CLOSESOCKETFUNCTION:
+			curl_easy_setopt(ch->cp, CURLOPT_CLOSESOCKETFUNCTION, curl_closesocket);
+			curl_easy_setopt(ch->cp, CURLOPT_CLOSESOCKETDATA, ch);
+			if (ch->handlers->closesocket == NULL) {
+				ch->handlers->closesocket = ecalloc(1, sizeof(php_curl_callback_function));
+			} else if (ch->handlers->closesocket->func_name) {
+				zval_ptr_dtor(&ch->handlers->closesocket->func_name);
+				ch->handlers->closesocket->fci_cache = empty_fcall_info_cache;
+			}
+			zval_add_ref(zvalue);
+			ch->handlers->closesocket->func_name = *zvalue;
+			ch->handlers->closesocket->method = PHP_CURL_USER;
+			break;
+
+#endif
+
 #if LIBCURL_VERSION_NUM >= 0x071500 /* Available since 7.21.0 */
 		case CURLOPT_FNMATCH_FUNCTION:
 			curl_easy_setopt(ch->cp, CURLOPT_FNMATCH_FUNCTION, curl_fnmatch);
@@ -3297,6 +3514,23 @@ static void _php_curl_close_ex(php_curl *ch TSRMLS_DC)
 		efree(ch->handlers->sockopt);
 	}
 #endif
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
+	if (ch->handlers->opensocket) {
+		if (ch->handlers->opensocket->func_name) {
+			zval_ptr_dtor(&ch->handlers->opensocket->func_name);
+		}
+		efree(ch->handlers->opensocket);
+	}
+#endif
+#if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071507 /* Available since 7.21.7 */
+	if (ch->handlers->closesocket) {
+		if (ch->handlers->closesocket->func_name) {
+			zval_ptr_dtor(&ch->handlers->closesocket->func_name);
+		}
+		efree(ch->handlers->closesocket);
+	}
+#endif
+
 #if LIBCURL_VERSION_NUM >= 0x071500 /* Available since 7.21.0 */
 	if (ch->handlers->fnmatch) {
 		if (ch->handlers->fnmatch->func_name) {
