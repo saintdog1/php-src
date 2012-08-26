@@ -135,6 +135,7 @@ typedef struct {
 	php_curl_progress *progress;
 #if LIBCURL_VERSION_NUM >= 0x071000 /* Available since 7.16.0 */
 	php_curl_callback_function *sockopt;
+	zval *fd;
 #endif
 #if LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
 	php_curl_callback_function *opensocket;

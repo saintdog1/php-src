@@ -1306,13 +1306,6 @@ static int curl_sockopt(void *ctx, curl_socket_t curlfd, curlsocktype purpose) {
 	int rval = 0;
 	switch (t->method) {
 		case PHP_CURL_USER: {
-			php_socket  *php_sock = emalloc(sizeof *php_sock);
-			php_sock->bsd_socket = curlfd;
-			php_sock->type       = PF_UNSPEC;
-			php_sock->error      = 0;
-			php_sock->blocking   = 1;
-			php_sock->zstream    = NULL;
-
 			zval **argv[3];
 			zval *zhandle = NULL;
 			zval *zcurlfd = NULL;
@@ -1323,12 +1316,25 @@ static int curl_sockopt(void *ctx, curl_socket_t curlfd, curlsocktype purpose) {
 			TSRMLS_FETCH_FROM_CTX(ch->thread_ctx);
 
 			MAKE_STD_ZVAL(zhandle);
-			MAKE_STD_ZVAL(zcurlfd);
-			MAKE_STD_ZVAL(zpurpose);
-
 			ZVAL_RESOURCE(zhandle, ch->id);
 			zend_list_addref(ch->id);
-			ZEND_REGISTER_RESOURCE(zcurlfd, php_sock, php_sockets_le_socket());
+	
+			if (ch->handlers->fd) {
+				zcurlfd = ch->handlers->fd;
+			} else {
+				php_socket *php_sock = emalloc(sizeof *php_sock);
+				php_sock->bsd_socket = curlfd;
+				php_sock->type       = PF_UNSPEC;
+				php_sock->error      = 0;
+				php_sock->blocking   = 1;
+				php_sock->zstream    = NULL;
+
+				MAKE_STD_ZVAL(zcurlfd);
+				ZEND_REGISTER_RESOURCE(zcurlfd, php_sock, php_sockets_le_socket());
+				ch->handlers->fd = zcurlfd;
+			}
+			
+			MAKE_STD_ZVAL(zpurpose);
 			ZVAL_LONG(zpurpose, purpose);
 
 			argv[0] = &zhandle;
@@ -1358,13 +1364,8 @@ static int curl_sockopt(void *ctx, curl_socket_t curlfd, curlsocktype purpose) {
 				zval_ptr_dtor(&retval_ptr);
 			}
 			zval_ptr_dtor(argv[0]);
-
-			php_sock->bsd_socket = -1; // We don't want the socket to be destroyed
-
-			zval_ptr_dtor(argv[1]);
 			zval_ptr_dtor(argv[2]);
 			break;
-
 		}
 	}
 	return rval;
@@ -1427,8 +1428,10 @@ static curl_socket_t curl_opensocket(void *ctx, curlsocktype purpose, struct cur
 					if (ZEND_FETCH_RESOURCE_NO_RETURN(php_sock, php_socket *, &retval_ptr, -1, NULL, php_sockets_le_socket())) {
 						rval = php_sock->bsd_socket;
 						php_sock->bsd_socket = -1;
+						ch->handlers->fd = retval_ptr;	
 					} else {
 						rval = CURL_SOCKET_BAD;
+						zval_ptr_dtor(&retval_ptr);
 					}
 				} else {
 					if (Z_TYPE_P(retval_ptr) != IS_LONG) {
@@ -1436,8 +1439,8 @@ static curl_socket_t curl_opensocket(void *ctx, curlsocktype purpose, struct cur
 					} else {
 						rval = Z_LVAL_P(retval_ptr);
 					}
+					zval_ptr_dtor(&retval_ptr);
 				}
-				zval_ptr_dtor(&retval_ptr);
 			}
 			zval_ptr_dtor(argv[0]);
 			zval_ptr_dtor(argv[1]);
@@ -1452,7 +1455,7 @@ static curl_socket_t curl_opensocket(void *ctx, curlsocktype purpose, struct cur
 #endif
 
 #if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071507 /* Available since 7.21.7 */
-/* {{{ curl_opensocket
+/* {{{ curl_closesocket
  */
 static int curl_closesocket(void *ctx, curl_socket_t curlfd) {
 	php_curl *ch = (php_curl *) ctx;
@@ -1460,12 +1463,6 @@ static int curl_closesocket(void *ctx, curl_socket_t curlfd) {
 	int rval = 0;
 	switch (t->method) {
 		case PHP_CURL_USER: {
-			php_socket  *php_sock = emalloc(sizeof *php_sock);
-			php_sock->bsd_socket = curlfd;
-			php_sock->type       = PF_UNSPEC;
-			php_sock->error      = 0;
-			php_sock->blocking   = 1;
-			php_sock->zstream    = NULL;
 
 			zval **argv[2];
 			zval *zhandle = NULL;
@@ -1476,12 +1473,22 @@ static int curl_closesocket(void *ctx, curl_socket_t curlfd) {
 			TSRMLS_FETCH_FROM_CTX(ch->thread_ctx);
 
 			MAKE_STD_ZVAL(zhandle);
-			MAKE_STD_ZVAL(zcurlfd);
-
 			ZVAL_RESOURCE(zhandle, ch->id);
 			zend_list_addref(ch->id);
 
-			ZEND_REGISTER_RESOURCE(zcurlfd, php_sock, php_sockets_le_socket());
+			if (ch->handlers->fd) {
+				zcurlfd = ch->handlers->fd;
+			} else {
+				php_socket  *php_sock = emalloc(sizeof *php_sock);
+				php_sock->bsd_socket = curlfd;
+				php_sock->type       = PF_UNSPEC;
+				php_sock->error      = 0;
+				php_sock->blocking   = 1;
+				php_sock->zstream    = NULL;
+
+				MAKE_STD_ZVAL(zcurlfd);
+				ZEND_REGISTER_RESOURCE(zcurlfd, php_sock, php_sockets_le_socket());
+			}
 
 			argv[0] = &zhandle;
 			argv[1] = &zcurlfd;
@@ -1508,6 +1515,7 @@ static int curl_closesocket(void *ctx, curl_socket_t curlfd) {
 				rval = Z_LVAL_P(retval_ptr);
 				zval_ptr_dtor(&retval_ptr);
 			}
+			ch->handlers->fd = NULL;
 			zval_ptr_dtor(argv[0]);
 			zval_ptr_dtor(argv[1]);
 			break;
@@ -1961,6 +1969,7 @@ static void alloc_curl_handle(php_curl **ch)
 	(*ch)->handlers->progress     = NULL;
 #if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071000 /* Available since 7.16.0 */
 	(*ch)->handlers->sockopt      = NULL;
+	(*ch)->handlers->fd           = NULL;
 #endif
 #if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
 	(*ch)->handlers->opensocket   = NULL;
@@ -2233,6 +2242,10 @@ PHP_FUNCTION(curl_copy_handle)
 		dupch->handlers->sockopt->method = ch->handlers->sockopt->method;
 		curl_easy_setopt(dupch->cp, CURLOPT_SOCKOPTDATA, (void *) dupch);
 	}
+	if (ch->handlers->fd) {
+		zval_add_ref(&ch->handlers->fd);
+	}
+	dupch->handlers->fd = ch->handlers->fd;
 #endif
 #if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
 	if (ch->handlers->opensocket) {
@@ -2243,6 +2256,7 @@ PHP_FUNCTION(curl_copy_handle)
 		}
 		dupch->handlers->opensocket->method = ch->handlers->opensocket->method;
 		curl_easy_setopt(dupch->cp, CURLOPT_OPENSOCKETDATA, (void *) dupch);
+
 	}
 #endif
 #if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071507 /* Available since 7.21.7 */
@@ -3512,6 +3526,9 @@ static void _php_curl_close_ex(php_curl *ch TSRMLS_DC)
 			zval_ptr_dtor(&ch->handlers->sockopt->func_name);
 		}
 		efree(ch->handlers->sockopt);
+	}
+	if (ch->handlers->fd) {
+		zval_ptr_dtor(&ch->handlers->fd);
 	}
 #endif
 #if defined(PHPCURL_SOCKETS_SUPPORT) && LIBCURL_VERSION_NUM >= 0x071101 /* Available since 7.17.1 */
