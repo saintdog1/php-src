@@ -1244,6 +1244,10 @@ PHP_MINIT_FUNCTION(curl)
 	REGISTER_CURL_CONSTANT(CURLMOPT_PIPELINING_SITE_BL);
 #endif
 
+#if LIBCURL_VERSION_NUM >= 0x071f00 /* Available since 7.31.0 */
+	REGISTER_CURL_CONSTANT(CURLOPT_SASL_IR);
+#endif
+
 #if LIBCURL_VERSION_NUM >= 0x072200 /* Available since 7.34.0 */
 	REGISTER_CURL_CONSTANT(CURL_SSLVERSION_TLSv1_0);
 	REGISTER_CURL_CONSTANT(CURL_SSLVERSION_TLSv1_1);
@@ -2204,6 +2208,9 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 		case CURLOPT_TCP_KEEPALIVE:
 		case CURLOPT_TCP_KEEPIDLE:
 		case CURLOPT_TCP_KEEPINTVL:
+#endif
+#if LIBCURL_VERSION_NUM >= 0x071f00 /* Available since 7.31.0 */
+		case CURLOPT_SASL_IR:
 #endif
 #if CURLOPT_MUTE != 0
 		case CURLOPT_MUTE:
