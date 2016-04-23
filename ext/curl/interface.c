@@ -1335,6 +1335,12 @@ PHP_MINIT_FUNCTION(curl)
 	REGISTER_CURL_CONSTANT(CURLOPT_TFTP_NO_OPTIONS);
 #endif
 
+#if LIBCURL_VERSION_NUM >= 0x073100 /* Available since 7.49.0 */
+	REGISTER_CURL_CONSTANT(CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE);
+	REGISTER_CURL_CONSTANT(CURLOPT_CONNECT_TO);
+	REGISTER_CURL_CONSTANT(CURLOPT_TCP_FASTOPEN);
+#endif
+
 #if CURLOPT_FTPASCII != 0
 	REGISTER_CURL_CONSTANT(CURLOPT_FTPASCII);
 #endif
@@ -2308,6 +2314,9 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 #if LIBCURL_VERSION_NUM >= 0x073000 /* Available since 7.48.0 */
 		case CURLOPT_TFTP_NO_OPTIONS:
 #endif
+#if LIBCURL_VERSION_NUM >= 0x073100 /* Available since 7.49.0 */
+		case CURLOPT_TCP_FASTOPEN:
+#endif
 #if CURLOPT_MUTE != 0
 		case CURLOPT_MUTE:
 #endif
@@ -2580,6 +2589,9 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 #if LIBCURL_VERSION_NUM >= 0x072500 /* Available since 7.37.0 */
 		case CURLOPT_PROXYHEADER:
 #endif
+#if LIBCURL_VERSION_NUM >= 0x073100 /* Available since 7.49.0 */
+		case CURLOPT_CONNECT_TO:
+#endif
 		{
 			zval *current;
 			HashTable *ph;
@@ -2621,6 +2633,11 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 #if LIBCURL_VERSION_NUM >= 0x072500 /* Available since 7.37.0 */
 					case CURLOPT_PROXYHEADER:
 						name = "CURLOPT_PROXYHEADER";
+						break;
+#endif
+#if LIBCURL_VERSION_NUM >= 0x073100 /* Available since 7.49.0 */
+					case CURLOPT_CONNECT_TO:
+						name = "CURLOPT_CONNECT_TO";
 						break;
 #endif
 				}
