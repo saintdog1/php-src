@@ -417,8 +417,61 @@ static int _php_curl_multi_setopt(php_curlm *mh, zend_long option, zval *zvalue,
 #if LIBCURL_VERSION_NUM >= 0x071003 /* 7.16.3 */
 		case CURLMOPT_MAXCONNECTS:
 #endif
+#if LIBCURL_VERSION_NUM >= 0x071e00 /* 7.30.0 */
+		case CURLMOPT_CHUNK_LENGTH_PENALTY_SIZE:
+		case CURLMOPT_CONTENT_LENGTH_PENALTY_SIZE:
+		case CURLMOPT_MAX_HOST_CONNECTIONS:
+		case CURLMOPT_MAX_PIPELINE_LENGTH:
+		case CURLMOPT_MAX_TOTAL_CONNECTIONS:
+#endif
 			error = curl_multi_setopt(mh->multi, option, zval_get_long(zvalue));
 			break;
+
+		/* char ** options or NULL */
+#if LIBCURL_VERSION_NUM >= 0x071e00 /* 7.30.0 */
+		case CURLMOPT_PIPELINING_SERVER_BL:
+		case CURLMOPT_PIPELINING_SITE_BL:
+		{
+			if (ZVAL_IS_NULL(zvalue)) {
+				error = curl_multi_setopt(mh->multi, option, NULL);
+			} else {
+				zval *current;
+				HashTable *ph;
+				zend_string *val;
+				char **char_list = NULL;
+				int i = 0;;
+
+				ph = HASH_OF(zvalue);
+				if (!ph) {
+					char *name = NULL;
+					switch (option) {
+						case CURLMOPT_PIPELINING_SERVER_BL:
+							name = "CURLMOPT_PIPELINING_SERVER_BL";
+							break;
+						case CURLMOPT_PIPELINING_SITE_BL:
+							name = "CURLMOPT_PIPELINING_SITE_BL";
+							break;
+					}
+					php_error_docref(NULL TSRMLS_CC, E_WARNING, "You must pass either null, an object or an array with the %s argument", name);
+					return FAILURE;
+				}
+
+				char_list = (char **) emalloc(sizeof(char *) * (zend_hash_num_elements(ph)+1));
+
+				ZEND_HASH_FOREACH_VAL(ph, current) {
+					ZVAL_DEREF(current);
+					val = zval_get_string(current);
+					char_list[i++] = ZSTR_VAL(val);
+					zend_string_release(val);
+				} ZEND_HASH_FOREACH_END();
+				char_list[i] = NULL;
+
+				error = curl_multi_setopt(mh->multi, option, char_list);
+				efree(char_list);
+			}
+			break;
+		}
+#endif /* char ** options are supported since 7.30.0 */
 
 		default:
 			php_error_docref(NULL, E_WARNING, "Invalid curl multi configuration option");
