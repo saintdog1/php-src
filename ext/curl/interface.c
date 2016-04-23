@@ -1331,6 +1331,10 @@ PHP_MINIT_FUNCTION(curl)
 	REGISTER_CURL_CONSTANT(CURL_HTTP_VERSION_2TLS);
 #endif
 
+#if LIBCURL_VERSION_NUM >= 0x073000 /* Available since 7.48.0 */
+	REGISTER_CURL_CONSTANT(CURLOPT_TFTP_NO_OPTIONS);
+#endif
+
 #if CURLOPT_FTPASCII != 0
 	REGISTER_CURL_CONSTANT(CURLOPT_FTPASCII);
 #endif
@@ -2300,6 +2304,9 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 #endif
 #if LIBCURL_VERSION_NUM >= 0x072e00 /* Available since 7.46.0 */
 		case CURLOPT_STREAM_WEIGHT:
+#endif
+#if LIBCURL_VERSION_NUM >= 0x073000 /* Available since 7.48.0 */
+		case CURLOPT_TFTP_NO_OPTIONS:
 #endif
 #if CURLOPT_MUTE != 0
 		case CURLOPT_MUTE:
