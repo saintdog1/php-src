@@ -1310,6 +1310,10 @@ PHP_MINIT_FUNCTION(curl)
 	REGISTER_CURL_CONSTANT(CURLSSLOPT_NO_REVOKE);
 #endif
 
+#if LIBCURL_VERSION_NUM >= 0x072d00 /* Available since 7.45.0 */
+	REGISTER_CURL_CONSTANT(CURLOPT_DEFAULT_PROTOCOL);
+#endif
+
 #if CURLOPT_FTPASCII != 0
 	REGISTER_CURL_CONSTANT(CURLOPT_FTPASCII);
 #endif
@@ -2371,6 +2375,9 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 #if LIBCURL_VERSION_NUM >= 0x072b00 /* Available since 7.43.0 */
 		case CURLOPT_PROXY_SERVICE_NAME:
 		case CURLOPT_SERVICE_NAME:
+#endif
+#if LIBCURL_VERSION_NUM >= 0x072d00 /* Available since 7.45.0 */
+		case CURLOPT_DEFAULT_PROTOCOL:
 #endif
 		{
 			zend_string *str = zval_get_string(zvalue);
