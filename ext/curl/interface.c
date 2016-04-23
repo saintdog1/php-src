@@ -1256,6 +1256,8 @@ PHP_MINIT_FUNCTION(curl)
 #endif
 
 #if LIBCURL_VERSION_NUM >= 0x072200 /* Available since 7.34.0 */
+	REGISTER_CURL_CONSTANT(CURLOPT_LOGIN_OPTIONS);
+
 	REGISTER_CURL_CONSTANT(CURL_SSLVERSION_TLSv1_0);
 	REGISTER_CURL_CONSTANT(CURL_SSLVERSION_TLSv1_1);
 	REGISTER_CURL_CONSTANT(CURL_SSLVERSION_TLSv1_2);
@@ -2303,6 +2305,9 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 #endif
 #if LIBCURL_VERSION_NUM >= 0x071900 /* Available since 7.25.0 */
 		case CURLOPT_MAIL_AUTH:
+#endif
+#if LIBCURL_VERSION_NUM >= 0x072200 /* Available since 7.34.0 */
+		case CURLOPT_LOGIN_OPTIONS:
 #endif
 		{
 			zend_string *str = zval_get_string(zvalue);
