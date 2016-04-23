@@ -1314,6 +1314,12 @@ PHP_MINIT_FUNCTION(curl)
 	REGISTER_CURL_CONSTANT(CURLOPT_DEFAULT_PROTOCOL);
 #endif
 
+#if LIBCURL_VERSION_NUM >= 0x072e00 /* Available since 7.46.0 */
+	REGISTER_CURL_CONSTANT(CURLOPT_STREAM_DEPENDS);
+	REGISTER_CURL_CONSTANT(CURLOPT_STREAM_DEPENDS_E);
+	REGISTER_CURL_CONSTANT(CURLOPT_STREAM_WEIGHT);
+#endif
+
 #if CURLOPT_FTPASCII != 0
 	REGISTER_CURL_CONSTANT(CURLOPT_FTPASCII);
 #endif
@@ -2281,6 +2287,9 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 #if LIBCURL_VERSION_NUM >= 0x072b00 /* Available since 7.43.0 */
 		case CURLOPT_PIPEWAIT:
 #endif
+#if LIBCURL_VERSION_NUM >= 0x072e00 /* Available since 7.46.0 */
+		case CURLOPT_STREAM_WEIGHT:
+#endif
 #if CURLOPT_MUTE != 0
 		case CURLOPT_MUTE:
 #endif
@@ -2622,6 +2631,18 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 
 			break;
 		}
+		/* curl handle */
+#if LIBCURL_VERSION_NUM >= 0x072e00 /* Available since 7.46.0 */
+		case CURLOPT_STREAM_DEPENDS:
+		case CURLOPT_STREAM_DEPENDS_E:
+		{
+			php_curl *curl_handle;
+			if ((curl_handle = (php_curl *)zend_fetch_resource_ex(zvalue, le_curl_name, le_curl))) {
+				curl_easy_setopt(ch->cp, option, curl_handle->cp);
+			}
+			break;
+		}
+#endif
 
 		case CURLOPT_BINARYTRANSFER:
 			/* Do nothing, just backward compatibility */
