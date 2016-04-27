@@ -456,7 +456,7 @@ static int _php_curl_multi_setopt(php_curlm *mh, zend_long option, zval *zvalue,
 					return FAILURE;
 				}
 
-				char_list = (char **) emalloc(sizeof(char *) * (zend_hash_num_elements(ph)+1));
+				char_list = (char **) safe_emalloc(zend_hash_num_elements(ph) + 1, sizeof(char *), 0);
 
 				ZEND_HASH_FOREACH_VAL(ph, current) {
 					ZVAL_DEREF(current);
