@@ -2673,7 +2673,7 @@ static int _php_curl_setopt(php_curl *ch, zend_long option, zval *zvalue) /* {{{
 		{
 			php_curl *curl_handle;
 			if ((curl_handle = (php_curl *)zend_fetch_resource_ex(zvalue, le_curl_name, le_curl))) {
-				curl_easy_setopt(ch->cp, option, curl_handle->cp);
+				error = curl_easy_setopt(ch->cp, option, curl_handle->cp);
 			}
 			break;
 		}
